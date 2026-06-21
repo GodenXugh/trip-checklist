@@ -88,6 +88,17 @@
   .row input.etxt{flex:1; border:1px solid var(--line); border-radius:8px; padding:7px 9px}
   .del{width:30px; height:30px; flex:none; border-radius:8px; color:var(--danger); background:var(--warnbg); font-size:17px; display:flex; align-items:center; justify-content:center}
 
+  /* Drag handle + drag visuals */
+  .drag{width:28px; height:36px; flex:none; display:flex; align-items:center; justify-content:center;
+    color:#94a3b8; font-size:18px; cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none}
+  .drag:active{cursor:grabbing; color:var(--brand)}
+  .row.ph{display:none}
+  .dragclone{position:fixed; left:0; top:0; z-index:80; pointer-events:none; background:var(--card);
+    box-shadow:0 12px 26px rgba(15,23,42,.24); border:1px solid var(--line); border-radius:11px;
+    padding:9px 10px; display:flex; align-items:center; gap:11px; opacity:.98}
+  .dropgap{box-sizing:border-box; border:2px dashed var(--brand); background:rgba(79,70,229,.07);
+    border-radius:10px; margin:1px 6px; pointer-events:none}
+
   .additem{display:flex; gap:8px; padding:6px 10px 10px}
   .additem input{flex:1; border:1px solid var(--line); border-radius:9px; padding:8px 10px; background:#fcfdff}
   .additem button{padding:0 14px; border-radius:9px; background:#eef2ff; color:var(--brand); font-weight:650; font-size:14px}
@@ -156,6 +167,13 @@
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id'+Date.now()+Math.random().toString(16).slice(2));
   const $ = (s,r=document)=>r.querySelector(s);
   const esc = (s)=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  // ---------- Version / changelog (维护版本时在此追加最新一条) ----------
+  const APP_VERSION='1.1.0';
+  const CHANGELOG=[
+    {v:'1.1.0', date:'2026-06-21', notes:['条目可按住右侧 ⠿ 手柄上下拖动排序','可直接拖动到其他分类，自动归入该分类','拖动时其他条目平滑滑动让位、留出空隙，落点一目了然']},
+    {v:'1.0.0', date:'2026-06-21', notes:['首个版本：多份清单、出差/旅游模板、复制上次清单','勾选进度统计、自定义分类与条目','离线可用（PWA）、备份导出与导入']},
+  ];
 
   // ---------- Storage ----------
   function load(){
@@ -277,8 +295,10 @@
           : `<div class="cat-head"><span class="cname">${esc(c.name)}</span><span class="ccount">${cdone}/${c.entries.length}</span></div>`;
         const rows = c.entries.map(e=>{
           if(edit){
-            return `<div class="row"><input class="etxt" data-edit="entry" data-si="${si}" data-cid="${c.id}" data-eid="${e.id}" value="${esc(e.text)}" />
-              <button class="del" data-act="del-entry" data-si="${si}" data-cid="${c.id}" data-eid="${e.id}">×</button></div>`;
+            return `<div class="row" data-row data-si="${si}" data-cid="${c.id}" data-eid="${e.id}">
+              <input class="etxt" data-edit="entry" data-si="${si}" data-cid="${c.id}" data-eid="${e.id}" value="${esc(e.text)}" />
+              <button class="del" data-act="del-entry" data-si="${si}" data-cid="${c.id}" data-eid="${e.id}">×</button>
+              <span class="drag" data-drag title="拖动排序">⠿</span></div>`;
           }
           return `<div class="row ${e.done?'done':''}" data-act="toggle" data-si="${si}" data-cid="${c.id}" data-eid="${e.id}">
             <span class="check">${e.done?'✓':''}</span><span class="txt">${esc(e.text)}</span></div>`;
@@ -286,7 +306,7 @@
         const adder = `<div class="additem">
             <input placeholder="添加${s.type==='item'?'物品':'事项'}…" data-add="entry" data-si="${si}" data-cid="${c.id}" />
             <button data-act="add-entry" data-si="${si}" data-cid="${c.id}">添加</button></div>`;
-        return `<div class="cat">${head}${rows}${adder}</div>`;
+        return `<div class="cat" data-si="${si}" data-cid="${c.id}">${head}${rows}${adder}</div>`;
       }).join('');
       const addcat = edit ? `<div class="addcat"><div class="additem">
           <input placeholder="新建分类名…" data-add="cat" data-si="${si}" />
@@ -308,7 +328,7 @@
         <div class="pbar"><i style="width:${p.pct}%"></i></div>
       </div>
       <div class="wrap">${sections}
-        ${edit?'':'<div class="hint">点条目打勾完成。点右上 ✎ 进入编辑可增删、改名、加分类。</div>'}
+        ${edit?'<div class="hint">按住每行右侧 ⠿ 可上下拖动排序，拖到其他分类即归入该分类。</div>':'<div class="hint">点条目打勾完成。点右上 ✎ 进入编辑可增删、改名、加分类、拖动排序。</div>'}
       </div>`;
   }
 
@@ -382,8 +402,15 @@
       <div class="menu-item" data-act="export"><span class="mi">⬇️</span>导出全部清单（.json）</div>
       <label class="menu-item"><span class="mi">⬆️</span>从备份文件导入
         <input type="file" id="imp" accept="application/json,.json" hidden></label>
+      <div class="menu-item" data-act="changelog"><span class="mi">📝</span>更新日志（v${APP_VERSION}）</div>
       <div class="hint" style="text-align:left">导入会把备份里的清单追加到当前列表，不会覆盖现有清单。</div>`);
     $('#imp').onchange=e=>{ if(e.target.files[0]) importData(e.target.files[0]); };
+  }
+  function changelogSheet(){
+    openSheet(`<h2>更新日志 · 当前 v${APP_VERSION}</h2>`+CHANGELOG.map(c=>
+      `<div style="margin-bottom:15px"><b style="font-size:15px">v${c.v}</b> <span style="color:var(--muted);font-size:12.5px">${c.date}</span>
+       <ul style="margin:6px 0 0;padding-left:18px;font-size:13.5px">${c.notes.map(n=>`<li style="margin:3px 0">${esc(n)}</li>`).join('')}</ul></div>`
+    ).join(''));
   }
   function tripMenuSheet(){
     const t=curTrip();
@@ -416,6 +443,7 @@
 
     const act=d.act;
     if(act==='menu') return backupSheet();
+    if(act==='changelog') return changelogSheet();
     if(act==='export') return exportData();
     if(act==='back') return go('home');
     if(act==='edit'){ state.editMode=true; return rerender(); }
@@ -499,6 +527,116 @@
   });
 
   $('#fab').addEventListener('click', newTripSheet);
+
+  // ---------- Drag to reorder / move entries (edit mode, touch + mouse) ----------
+  let drag=null, gap=null;
+  function getGap(){ if(!gap){ gap=document.createElement('div'); gap.className='dropgap'; } return gap; }
+  function clearGap(){ if(gap && gap.parentNode) gap.parentNode.removeChild(gap); }
+  function positionClone(){ if(drag) drag.clone.style.transform=`translate(${drag.x-drag.dx}px,${drag.y-drag.dy}px)`; }
+
+  // 拖动开始时拍一次“去掉被拖条目”的布局快照（文档坐标，全程不变），落点判断只依赖手指坐标 vs 快照 → 不受动画影响、不抖动
+  function snapshotSlots(){
+    const sy=window.scrollY;
+    drag.slots=[...document.querySelectorAll(`.cat[data-cid][data-si="${drag.si}"]`)].map(cc=>{
+      const cr=cc.getBoundingClientRect();
+      const rows=[...cc.querySelectorAll('.row[data-row]')].filter(r=>!r.classList.contains('ph')).map(r=>{
+        const rr=r.getBoundingClientRect(); return { eid:r.dataset.eid, mid: rr.top+rr.height/2+sy };
+      });
+      return { cid:cc.dataset.cid, top:cr.top+sy, bottom:cr.bottom+sy, rows };
+    });
+  }
+  function evaluateDrop(){
+    if(!drag || !drag.slots || !drag.slots.length) return;
+    const py=(drag.y-drag.dy+drag.gapH/2)+window.scrollY; // 以悬浮条目的中心（而非手指点）对齐落点，空隙正好开在拖动项所在处
+    let cat=null;
+    for(const s of drag.slots){ if(py>=s.top && py<=s.bottom){ cat=s; break; } }
+    if(!cat){ let bd=Infinity; for(const s of drag.slots){ const d=py<s.top? s.top-py : py-s.bottom; if(d<bd){ bd=d; cat=s; } } } // 越界则就近，限制在同区块内
+    if(!cat) return;
+    let beforeEid=null;
+    for(const r of cat.rows){ if(py<r.mid){ beforeEid=r.eid; break; } }
+    const key=cat.cid+':'+(beforeEid||'END');
+    drag.target={ toCid:cat.cid, beforeEid };
+    if(key===drag.slotKey) return;              // 落点未变：什么都不做（关键：杜绝重复动画/抖动）
+    const catEl=document.querySelector(`.cat[data-cid="${cat.cid}"]`); if(!catEl) return;
+    const beforeEl=beforeEid? catEl.querySelector(`.row[data-row][data-eid="${beforeEid}"]`) : catEl.querySelector('.additem');
+    const animRows=[...document.querySelectorAll(`.row[data-row][data-si="${drag.si}"]`)].filter(r=>!r.classList.contains('ph'));
+    const first=new Map(); animRows.forEach(r=>first.set(r, r.getBoundingClientRect().top)); // First：当前视觉位置（支持动画中途打断）
+    catEl.insertBefore(getGap(), beforeEl);
+    drag.slotKey=key;
+    flipRows(animRows, first);
+  }
+  function flipRows(animRows, first){
+    animRows.forEach(r=>{ r.style.transition='none'; r.style.transform='none'; });
+    void document.body.offsetWidth;                                  // 重排，读到真实新布局（Last）
+    animRows.forEach(r=>{ if(!first.has(r)) return; const dy=first.get(r)-r.getBoundingClientRect().top; if(Math.abs(dy)>0.5) r.style.transform=`translateY(${dy}px)`; });
+    void document.body.offsetWidth;                                  // 应用反向位移（Invert）
+    animRows.forEach(r=>{ r.style.transition='transform .16s cubic-bezier(.2,.7,.3,1)'; r.style.transform=''; }); // 过渡回零（Play）
+  }
+  function dragLoop(){
+    if(!drag) return;
+    const top=100, bot=window.innerHeight-120;
+    if(drag.y<top) window.scrollBy(0,-Math.ceil((top-drag.y)/5));
+    else if(drag.y>bot) window.scrollBy(0,Math.ceil((drag.y-bot)/5));
+    evaluateDrop();
+    drag.raf=requestAnimationFrame(dragLoop);
+  }
+  function moveEntry(t, si, fromCid, eid, toCid, beforeEid){
+    const sec=t.sections[si];
+    const from=sec.cats.find(c=>c.id===fromCid);
+    const idx=from.entries.findIndex(e=>e.id===eid); if(idx<0) return;
+    const [moved]=from.entries.splice(idx,1);
+    const to=sec.cats.find(c=>c.id===toCid);
+    let at;
+    if(beforeEid==null){ at=to.entries.length; }
+    else { at=to.entries.findIndex(e=>e.id===beforeEid); if(at<0) at=to.entries.length; }
+    to.entries.splice(at,0,moved);
+  }
+  function endDrag(commit){
+    if(!drag) return;
+    const d=drag; drag=null;
+    cancelAnimationFrame(d.raf);
+    document.body.style.userSelect='';
+    if(d.clone.parentNode) d.clone.parentNode.removeChild(d.clone);
+    clearGap();
+    if(commit && d.target){
+      const t=curTrip();
+      if(t){ moveEntry(t, +d.si, d.fromCid, d.eid, d.target.toCid, d.target.beforeEid); touch(t); save(); }
+    }
+    rerender();
+  }
+  document.body.addEventListener('pointerdown',(ev)=>{
+    const h=ev.target.closest('.drag[data-drag]');
+    if(!h || !state.editMode || drag) return;
+    const row=h.closest('.row[data-row]'); if(!row) return;
+    ev.preventDefault();
+    const rect=row.getBoundingClientRect();
+    const clone=row.cloneNode(true); clone.classList.add('dragclone');
+    clone.removeAttribute('data-row'); clone.removeAttribute('data-si'); // 防止浮动副本被行选择器/FLIP 误伤导致跳动
+    clone.style.width=rect.width+'px';
+    document.body.appendChild(clone);
+    getGap().style.height=rect.height+'px';
+    drag={ si:row.dataset.si, fromCid:row.dataset.cid, eid:row.dataset.eid, clone, srcRow:row, gapH:rect.height,
+      dx:ev.clientX-rect.left, dy:ev.clientY-rect.top, x:ev.clientX, y:ev.clientY, target:null, slotKey:null, slots:[], raf:0 };
+    row.classList.add('ph');                 // 隐藏源行（不占布局）
+    snapshotSlots();                          // 在插入占位条之前、以去掉源行的布局拍快照
+    const nb=row.nextElementSibling;          // 拿起即在原位留空，避免列表跳动
+    row.parentNode.insertBefore(getGap(), nb);
+    const nbEid=(nb&&nb.matches&&nb.matches('.row[data-row]'))?nb.dataset.eid:null;
+    drag.slotKey=row.dataset.cid+':'+(nbEid||'END');
+    drag.target={ toCid:row.dataset.cid, beforeEid:nbEid };
+    positionClone();
+    try{ h.setPointerCapture(ev.pointerId); }catch(_){}
+    document.body.style.userSelect='none';
+    drag.raf=requestAnimationFrame(dragLoop);
+  },{passive:false});
+  document.body.addEventListener('pointermove',(ev)=>{
+    if(!drag) return;
+    ev.preventDefault();
+    drag.x=ev.clientX; drag.y=ev.clientY;
+    positionClone(); evaluateDrop();
+  },{passive:false});
+  document.body.addEventListener('pointerup',(ev)=>{ if(drag){ ev.preventDefault(); endDrag(true); } },{passive:false});
+  document.body.addEventListener('pointercancel',()=>{ if(drag) endDrag(false); });
 
   // ---------- Boot ----------
   renderHome();

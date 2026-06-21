@@ -1,6 +1,6 @@
 // Service Worker — cache-first app shell for full offline use.
 // Bump CACHE version when you change any shell file to force an update.
-const CACHE = 'chuxing-v1';
+const CACHE = 'chuxing-v2';
 const ASSETS = [
   './',
   './index.html',
